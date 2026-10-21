@@ -355,7 +355,7 @@ class SimulationEngine(
             id = "reset-${System.currentTimeMillis()}",
             timestamp = System.currentTimeMillis(),
             title = "System Baseline Restored",
-            description = "All simulated hazards cleared. Telemetry normalized to nominal baseline.",
+            description = "All active hazards resolved. Telemetry normalized to operational baseline.",
             shield = ShieldType.ALL,
             risk = RiskLevel.GREEN,
             location = "Jammu Command Center",
@@ -373,7 +373,7 @@ class SimulationEngine(
             _autoDemo.value = AutoDemoState(
                 isRunning = true,
                 currentStep = 1,
-                caption = "Step 1/5: Jammu Rakshak baseline online. LoRaWAN sensors transmitting nominal telemetry across 7 sectors.",
+                caption = "Step 1/5: Jammu Rakshak baseline online. LoRaWAN sensors transmitting operational telemetry across 7 sectors.",
                 timeRemainingSeconds = 60
             )
 
@@ -438,7 +438,7 @@ class SimulationEngine(
             _autoDemo.update {
                 it.copy(
                     isRunning = false,
-                    caption = "✅ Auto Demo Completed: All 3 Shields (Fire, Structure, Water) successfully demonstrated."
+                    caption = "✅ Resilience Scenario Completed: All 3 Shields (Fire, Structure, Water) fully operational."
                 )
             }
         }

@@ -257,13 +257,13 @@ fun TopBar(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Tune,
-                            contentDescription = "Demo Controls",
+                            contentDescription = "Command Controls",
                             tint = Color(0xFFFFB74D),
                             modifier = Modifier.size(15.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "DEMO",
+                            text = "CONTROLS",
                             fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = Color(0xFFFFB74D)

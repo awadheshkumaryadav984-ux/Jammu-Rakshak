@@ -56,16 +56,16 @@ class GeminiCrackService(private val context: Context) {
             CityData.PRESET_CRACK_PHOTOS[0]
         }
         CrackAssessmentResult(
-            severity = preset.mockSeverity,
-            confidence = preset.mockConfidence,
+            severity = preset.severity,
+            confidence = preset.confidence,
             crackType = preset.type,
-            estimatedWidthMm = when (preset.mockSeverity) {
+            estimatedWidthMm = when (preset.severity) {
                 RiskLevel.RED -> 5.8
                 RiskLevel.AMBER -> 3.2
                 RiskLevel.GREEN -> 0.6
             },
-            explanation = preset.mockExplanation,
-            recommendedAction = preset.mockAction
+            explanation = preset.explanation,
+            recommendedAction = preset.action
         )
     }
 

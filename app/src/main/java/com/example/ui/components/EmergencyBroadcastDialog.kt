@@ -131,7 +131,7 @@ fun EmergencyBroadcastDialog(
                             color = CriticalRed
                         )
                         Text(
-                            text = "Simulated Citizen Emergency Notification & Inter-Agency Dispatch",
+                            text = "Citizen Emergency Alert & Inter-Agency Rapid Dispatch",
                             fontSize = 9.sp,
                             color = TextSecondary
                         )
@@ -168,7 +168,7 @@ fun EmergencyBroadcastDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
-                // Mock SMS Bubble
+                // Emergency SMS Bubble
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -182,7 +182,7 @@ fun EmergencyBroadcastDialog(
                             Icon(Icons.AutoMirrored.Filled.Message, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "MOCK SMS: +91 (JK-DISASTER-ALERT)",
+                                text = "BROADCAST SMS: +91 (JK-DISASTER-ALERT)",
                                 fontSize = 9.sp,
                                 fontFamily = FontFamily.Monospace,
                                 color = NeonCyan

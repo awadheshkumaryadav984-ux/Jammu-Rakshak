@@ -363,10 +363,10 @@ object CityData {
             type = "Diagonal Shear (Load-bearing)",
             location = "Old City / Raghunath Bazar",
             description = "Deep 5.8mm diagonal shear crack through old brick masonry wall.",
-            mockSeverity = RiskLevel.RED,
-            mockConfidence = 96,
-            mockExplanation = "Severe diagonal shear cracking indicating differential foundation settlement and active masonry shear failure.",
-            mockAction = "Immediate structural shoring required. Restrict upper floor occupancy within 6 hours."
+            severity = RiskLevel.RED,
+            confidence = 96,
+            explanation = "Severe diagonal shear cracking indicating differential foundation settlement and active masonry shear failure.",
+            action = "Immediate structural shoring required. Restrict upper floor occupancy within 6 hours."
         ),
         PresetCrack(
             id = "preset_2",
@@ -374,10 +374,10 @@ object CityData {
             type = "Thermal / Shrinkage Hairline",
             location = "Janipur Quarters",
             description = "Surface hairline network cracking across exterior plaster coating.",
-            mockSeverity = RiskLevel.GREEN,
-            mockConfidence = 91,
-            mockExplanation = "Superficial thermal expansion cracks confined to plaster layer with no structural masonry displacement.",
-            mockAction = "Routine elastomeric sealant re-coating during regular maintenance cycle."
+            severity = RiskLevel.GREEN,
+            confidence = 91,
+            explanation = "Superficial thermal expansion cracks confined to plaster layer with no structural masonry displacement.",
+            action = "Routine elastomeric sealant re-coating during regular maintenance cycle."
         ),
         PresetCrack(
             id = "preset_3",
@@ -385,10 +385,10 @@ object CityData {
             type = "Vertical Foundation Shift",
             location = "Jewel Chowk Commercial Arcade",
             description = "Vertical separation along column joint measuring 3.4mm.",
-            mockSeverity = RiskLevel.AMBER,
-            mockConfidence = 89,
-            mockExplanation = "Differential settlement along exterior structural column. Crack width exceeds aesthetic threshold.",
-            mockAction = "Install crack displacement gauge pins and survey ground water table within 48 hours."
+            severity = RiskLevel.AMBER,
+            confidence = 89,
+            explanation = "Differential settlement along exterior structural column. Crack width exceeds aesthetic threshold.",
+            action = "Install crack displacement gauge pins and survey ground water table within 48 hours."
         ),
         PresetCrack(
             id = "preset_4",
@@ -396,10 +396,10 @@ object CityData {
             type = "Heritage Wall Delamination",
             location = "Mubarak Mandi Palace Complex",
             description = "Historic lime mortar erosion with 4.5mm outward parapet bulge.",
-            mockSeverity = RiskLevel.RED,
-            mockConfidence = 94,
-            mockExplanation = "Lime mortar deterioration under moisture saturation causing exterior wall bulge and risk of parapet collapse.",
-            mockAction = "Cordon off ground perimeter immediately. Deploy conservation engineering scaffolding."
+            severity = RiskLevel.RED,
+            confidence = 94,
+            explanation = "Lime mortar deterioration under moisture saturation causing exterior wall bulge and risk of parapet collapse.",
+            action = "Cordon off ground perimeter immediately. Deploy conservation engineering scaffolding."
         )
     )
 
@@ -409,10 +409,10 @@ object CityData {
         val type: String,
         val location: String,
         val description: String,
-        val mockSeverity: RiskLevel,
-        val mockConfidence: Int,
-        val mockExplanation: String,
-        val mockAction: String
+        val severity: RiskLevel,
+        val confidence: Int,
+        val explanation: String,
+        val action: String
     )
 
     fun getEmergencySmsMessage(lang: Language, location: String, alertDetails: String): String {

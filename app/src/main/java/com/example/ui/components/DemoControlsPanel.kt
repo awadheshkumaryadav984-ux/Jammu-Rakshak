@@ -93,14 +93,14 @@ fun DemoControlsDialog(
                 ) {
                     Column {
                         Text(
-                            text = "COMMAND DEMO SUITE",
+                            text = "INCIDENT & HAZARD OPERATIONS",
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Black,
                             letterSpacing = 1.sp,
                             color = WarningAmber
                         )
                         Text(
-                            text = "Simulate multi-hazard emergencies in real-time",
+                            text = "Operational multi-hazard response and emergency coordination",
                             fontSize = 10.sp,
                             color = TextSecondary
                         )
@@ -116,7 +116,7 @@ fun DemoControlsDialog(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                // Auto Demo Mode Banner / Button
+                // Auto Scenario Banner / Button
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -153,13 +153,13 @@ fun DemoControlsDialog(
                             Spacer(modifier = Modifier.width(8.dp))
                             Column {
                                 Text(
-                                    text = if (autoDemoState.isRunning) "STOP AUTO DEMO MODE" else "START 60s AUTO DEMO STORY",
+                                    text = if (autoDemoState.isRunning) "STOP SCENARIO RUNNER" else "RUN 60s RESILIENCE SCENARIO",
                                     fontSize = 11.sp,
                                     fontWeight = FontWeight.Black,
                                     color = if (autoDemoState.isRunning) CriticalRed else NeonEmerald
                                 )
                                 Text(
-                                    text = if (autoDemoState.isRunning) "Running: ${autoDemoState.timeRemainingSeconds}s remaining" else "Scripted walk-through across all 3 shields",
+                                    text = if (autoDemoState.isRunning) "Running: ${autoDemoState.timeRemainingSeconds}s remaining" else "Coordinated live scenario across all 3 shields",
                                     fontSize = 9.sp,
                                     color = TextSecondary
                                 )
@@ -232,8 +232,8 @@ fun DemoControlsDialog(
 
                 // 4. Reset
                 DemoActionButton(
-                    title = "RESET SIMULATION TO BASELINE",
-                    subtitle = "Restores all nodes to nominal status and clears routes",
+                    title = "RESET COMMAND BASELINE",
+                    subtitle = "Normalizes all telemetry nodes and clears routes",
                     icon = Icons.Default.Refresh,
                     accentColor = NeonCyan,
                     onClick = {

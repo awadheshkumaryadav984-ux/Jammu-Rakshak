@@ -1,0 +1,22 @@
+{
+  "name": "jammu-rakshak",
+  "version": "1.0.0",
+  "description": "Urban Resilience & Disaster Management Command Dashboard for Jammu Smart City Hackathon | Team ENDLIFERZ",
+  "main": "index.html",
+  "scripts": {
+    "dev": "npx serve .",
+    "start": "npx serve .",
+    "build": "echo 'Static web build ready'"
+  },
+  "keywords": [
+    "jammu-smart-city",
+    "urban-resilience",
+    "disaster-management",
+    "endliferz",
+    "command-center",
+    "leaflet",
+    "react"
+  ],
+  "author": "Team ENDLIFERZ",
+  "license": "MIT"
+}

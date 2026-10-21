@@ -194,7 +194,7 @@ fun CitizenCrackReportDialog(
 
                 // Preset Crack Photos Selector
                 Text(
-                    text = "SELECT WALL CRACK SAMPLE (OR UPLOAD FROM DEVICE):",
+                    text = "SELECT CRACK SAMPLE OR UPLOAD PHOTO:",
                     fontSize = 9.5.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextMuted
@@ -236,10 +236,10 @@ fun CitizenCrackReportDialog(
                                 )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = preset.mockSeverity.name,
+                                    text = preset.severity.name,
                                     fontSize = 8.sp,
                                     fontWeight = FontWeight.Black,
-                                    color = when (preset.mockSeverity) {
+                                    color = when (preset.severity) {
                                         RiskLevel.RED -> CriticalRed
                                         RiskLevel.AMBER -> WarningAmber
                                         RiskLevel.GREEN -> NeonEmerald

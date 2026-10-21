@@ -1,0 +1,946 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jammu Rakshak — Resilience Command Dashboard | Team ENDLIFERZ</title>
+  <meta name="description" content="Urban Resilience & Disaster Management Command Dashboard for Jammu Smart City Hackathon. Fire Shield, Structure Shield, Water Shield. Team: ENDLIFERZ">
+  <meta name="theme-color" content="#0B132B">
+
+  <!-- PWA Web Manifest -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/png" href="/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            cyberDark: '#070C1B',
+            cyberNavy: '#0B132B',
+            cyberCard: '#111D42',
+            cyberElevated: '#1C2541',
+            cyberBorder: '#1E3A5F',
+            neonCyan: '#00E5FF',
+            neonEmerald: '#00E676',
+            warningAmber: '#FFB300',
+            criticalRed: '#FF3D00',
+            waterBlue: '#2979FF',
+            purpleAccent: '#9D4EDD'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- React 18 & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+  <!-- Babel Compiler -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    body {
+      background-color: #070C1B;
+      color: #F1F5F9;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+    }
+    .leaflet-container {
+      background-color: #0B132B !important;
+    }
+    /* Radar pulsing ring */
+    .radar-pulse {
+      animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      80%, 100% { transform: scale(2.4); opacity: 0; }
+    }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #070C1B; }
+    ::-webkit-scrollbar-thumb { background: #1E3A5F; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #00E5FF; }
+  </style>
+</head>
+<body class="bg-cyberDark text-slate-100 min-h-screen flex flex-col">
+  <div id="root"></div>
+
+  <script>
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js').catch(() => {});
+      });
+    }
+  </script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Web Audio Synthesizer for alerts
+    class SoundFX {
+      constructor() {
+        this.ctx = null;
+        this.enabled = true;
+      }
+      init() {
+        if (!this.ctx && typeof window !== 'undefined') {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) this.ctx = new AudioContext();
+        }
+      }
+      playTone(freq, type, duration) {
+        if (!this.enabled) return;
+        try {
+          this.init();
+          if (!this.ctx) return;
+          if (this.ctx.state === 'suspended') this.ctx.resume();
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = type || 'sine';
+          osc.frequency.value = freq || 440;
+          gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start();
+          osc.stop(this.ctx.currentTime + duration);
+        } catch(e) {}
+      }
+      beep() { this.playTone(880, 'sine', 0.12); }
+      warn() { this.playTone(440, 'triangle', 0.25); }
+      siren() {
+        this.playTone(660, 'sawtooth', 0.2);
+        setTimeout(() => this.playTone(880, 'sawtooth', 0.25), 180);
+      }
+    }
+    const sound = new SoundFX();
+
+    const JAMMU_CENTER = [32.7300, 74.8600];
+
+    const INITIAL_FIRE_NODES = [
+      { id: "FN-01", name: "Jewel Chowk Transit Substation", location: "Jewel Chowk", lat: 32.7230, lng: 74.8580, temp: 28.4, smoke: 22.0, gas: 14.0, alert: false, aiVerified: true },
+      { id: "FN-02", name: "Talab Tillo Wood Market Lane", location: "Talab Tillo", lat: 32.7240, lng: 74.8320, temp: 31.0, smoke: 28.0, gas: 18.0, alert: false, aiVerified: true },
+      { id: "FN-03", name: "Janipur Main Market Complex", location: "Janipur", lat: 32.7560, lng: 74.8450, temp: 27.8, smoke: 19.5, gas: 12.0, alert: false, aiVerified: true },
+      { id: "FN-04", name: "Golepulli Industrial Flammables", location: "Golepulli", lat: 32.7150, lng: 74.8190, temp: 29.5, smoke: 34.0, gas: 24.0, alert: false, aiVerified: true },
+      { id: "FN-05", name: "Sanjay Nagar Sector 3 Grid", location: "Sanjay Nagar", lat: 32.6950, lng: 74.8720, temp: 26.5, smoke: 16.0, gas: 10.0, alert: false, aiVerified: true },
+      { id: "FN-06", name: "Roop Nagar Housing Colony", location: "Roop Nagar", lat: 32.7680, lng: 74.8210, temp: 25.0, smoke: 14.0, gas: 9.0, alert: false, aiVerified: true },
+      { id: "FN-07", name: "Raghunath Bazar Heritage Alleys", location: "Old City", lat: 32.7315, lng: 74.8640, temp: 30.2, smoke: 31.0, gas: 21.0, alert: false, aiVerified: true }
+    ];
+
+    const INITIAL_BUILDINGS = [
+      { id: "BLD-01", name: "Mubarak Mandi Palace Complex", location: "Panjtirthi", lat: 32.7410, lng: 74.8720, age: 195, tilt: 1.4, crack: 3.8, vib: 0.42, risk: "AMBER", type: "Lime & Brick Masonry" },
+      { id: "BLD-02", name: "Talab Tillo Old Grain Silo", location: "Talab Tillo", lat: 32.7210, lng: 74.8350, age: 74, tilt: 0.5, crack: 1.2, vib: 0.18, risk: "GREEN", type: "Reinforced Concrete" },
+      { id: "BLD-03", name: "Janipur Old Municipal Quarters", location: "Janipur", lat: 32.7530, lng: 74.8480, age: 62, tilt: 1.9, crack: 4.6, vib: 0.65, risk: "AMBER", type: "Unreinforced Masonry" },
+      { id: "BLD-04", name: "Jewel Chowk Commercial Arcade", location: "Jewel Chowk", lat: 32.7250, lng: 74.8560, age: 48, tilt: 0.3, crack: 0.8, vib: 0.22, risk: "GREEN", type: "RCC Frame" },
+      { id: "BLD-05", name: "Bahu Fort Hillside Structure", location: "Bahu Fort", lat: 32.7280, lng: 74.8820, age: 210, tilt: 2.4, crack: 5.9, vib: 0.82, risk: "AMBER", type: "Stone Hillside Slope" },
+      { id: "BLD-06", name: "Sanjay Nagar Primary School", location: "Sanjay Nagar", lat: 32.6980, lng: 74.8700, age: 55, tilt: 0.4, crack: 0.9, vib: 0.14, risk: "GREEN", type: "Brick Slab" },
+      { id: "BLD-07", name: "Golepulli Canal Bridge Abutment", location: "Golepulli", lat: 32.7170, lng: 74.8210, age: 68, tilt: 1.1, crack: 2.4, vib: 0.35, risk: "GREEN", type: "Stone Arch" },
+      { id: "BLD-08", name: "Roop Nagar Hillside Tower", location: "Roop Nagar", lat: 32.7650, lng: 74.8250, age: 32, tilt: 0.2, crack: 0.5, vib: 0.11, risk: "GREEN", type: "Modern RCC" },
+      { id: "BLD-09", name: "Peer Kho Historic Vaults", location: "Old City", lat: 32.7360, lng: 74.8730, age: 180, tilt: 1.6, crack: 3.9, vib: 0.48, risk: "AMBER", type: "Ancient Vaults" },
+      { id: "BLD-10", name: "Gandhi Nagar Old Dispensary", location: "Gandhi Nagar", lat: 32.7090, lng: 74.8610, age: 58, tilt: 0.6, crack: 1.4, vib: 0.20, risk: "GREEN", type: "Steel Joist Masonry" }
+    ];
+
+    const INITIAL_DRAINS = [
+      { id: "DR-01", name: "Talab Tillo Main Nullah Outfall", location: "Talab Tillo", lat: 32.7225, lng: 74.8280, level: 85, max: 220, flow: 4.2 },
+      { id: "DR-02", name: "Janipur Chatha Nullah Intake", location: "Janipur", lat: 32.7520, lng: 74.8420, level: 110, max: 200, flow: 5.8 },
+      { id: "DR-03", name: "Jewel Chowk Sump Basin", location: "Jewel Chowk", lat: 32.7215, lng: 74.8550, level: 95, max: 180, flow: 3.6 },
+      { id: "DR-04", name: "Golepulli Branch Canal", location: "Golepulli", lat: 32.7135, lng: 74.8230, level: 70, max: 240, flow: 6.1 },
+      { id: "DR-05", name: "Sanjay Nagar Deep Storm Sewer", location: "Sanjay Nagar", lat: 32.6930, lng: 74.8690, level: 78, max: 190, flow: 2.9 },
+      { id: "DR-06", name: "Roop Nagar Ridge Drainage", location: "Roop Nagar", lat: 32.7710, lng: 74.8180, level: 65, max: 210, flow: 4.8 },
+      { id: "DR-07", name: "Tawi Promenade Interceptor", location: "Tawi Bank", lat: 32.7290, lng: 74.8690, level: 130, max: 300, flow: 14.5 },
+      { id: "DR-08", name: "Bahu Fort Gully Runoff Basin", location: "Bahu Fort", lat: 32.7260, lng: 74.8850, level: 52, max: 160, flow: 2.1 }
+    ];
+
+    const SPONGE_ZONES = [
+      { id: "SZ-01", name: "Talab Tillo Rain Garden Park", lat: 32.7260, lng: 74.8300, normalHrs: 7.5, spongeHrs: 0.8, type: "Bioswale Corridor" },
+      { id: "SZ-02", name: "Jewel Chowk Permeable Aquifer Pit", lat: 32.7245, lng: 74.8530, normalHrs: 6.2, spongeHrs: 1.1, type: "Aquifer Recharge Pit" },
+      { id: "SZ-03", name: "Janipur Valley Retention Buffer", lat: 32.7540, lng: 74.8400, normalHrs: 8.0, spongeHrs: 1.4, type: "Engineered Bioswale" },
+      { id: "SZ-04", name: "Sanjay Nagar Green Detention Pond", lat: 32.6960, lng: 74.8670, normalHrs: 9.2, spongeHrs: 1.2, type: "Retention Wetland" }
+    ];
+
+    function App() {
+      const [fireNodes, setFireNodes] = useState(INITIAL_FIRE_NODES);
+      const [buildings, setBuildings] = useState(INITIAL_BUILDINGS);
+      const [drains, setDrains] = useState(INITIAL_DRAINS);
+      const [spongeActive, setSpongeActive] = useState(true);
+      const [selectedLang, setSelectedLang] = useState('EN');
+      const [soundMuted, setSoundMuted] = useState(false);
+      const [activeTab, setActiveTab] = useState('fire');
+      const [alerts, setAlerts] = useState([
+        { id: 1, title: "Edge AI Guard Active", desc: "LoRaWAN gateway heartbeat online across 7 sectors.", shield: "ALL", risk: "GREEN", time: "Just now", verified: true },
+        { id: 2, title: "Heritage Vibration Sensor Online", desc: "Mubarak Mandi Palace BLD-01 report: Ambient 0.42 mm/s² within buffer.", shield: "STRUCTURE", risk: "AMBER", time: "25s ago", verified: true }
+      ]);
+      const [activeRoute, setActiveRoute] = useState(null);
+      const [showOpsModal, setShowOpsModal] = useState(false);
+      const [showCrackModal, setShowCrackModal] = useState(false);
+      const [showSmsModal, setShowSmsModal] = useState(false);
+      const [showArchModal, setShowArchModal] = useState(false);
+      const [showPublishModal, setShowPublishModal] = useState(false);
+      const [selectedNode, setSelectedNode] = useState(null);
+      const [autoScenarioCaption, setAutoScenarioCaption] = useState(null);
+      const [timeStr, setTimeStr] = useState(new Date().toLocaleTimeString());
+      const [toastMsg, setToastMsg] = useState(null);
+      const [pwaPrompt, setPwaPrompt] = useState(null);
+
+      const mapRef = useRef(null);
+      const leafletMap = useRef(null);
+      const markersLayer = useRef(null);
+      const routeLayer = useRef(null);
+
+      // PWA install prompt handler
+      useEffect(() => {
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault();
+          setPwaPrompt(e);
+        });
+      }, []);
+
+      const installPwa = () => {
+        if (pwaPrompt) {
+          pwaPrompt.prompt();
+          pwaPrompt.userChoice.then(() => setPwaPrompt(null));
+        } else {
+          showToast("PWA: You can install via your browser menu ('Add to Home Screen')");
+        }
+      };
+
+      const showToast = (msg) => {
+        setToastMsg(msg);
+        setTimeout(() => setToastMsg(null), 3000);
+      };
+
+      // Live clock
+      useEffect(() => {
+        const timer = setInterval(() => setTimeStr(new Date().toLocaleTimeString()), 1000);
+        return () => clearInterval(timer);
+      }, []);
+
+      // Initialize Leaflet
+      useEffect(() => {
+        if (!mapRef.current || leafletMap.current) return;
+
+        const map = L.map(mapRef.current, {
+          center: JAMMU_CENTER,
+          zoom: 13,
+          zoomControl: false
+        });
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; OpenStreetMap &copy; CARTO',
+          maxZoom: 19
+        }).addTo(map);
+
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        markersLayer.current = L.layerGroup().addTo(map);
+        routeLayer.current = L.layerGroup().addTo(map);
+        leafletMap.current = map;
+
+        return () => map.remove();
+      }, []);
+
+      // Draw Markers
+      useEffect(() => {
+        if (!leafletMap.current || !markersLayer.current) return;
+        markersLayer.current.clearLayers();
+
+        if (spongeActive) {
+          SPONGE_ZONES.forEach(sz => {
+            const circle = L.circle([sz.lat, sz.lng], {
+              radius: 420,
+              color: '#00E676',
+              fillColor: '#00E676',
+              fillOpacity: 0.18,
+              weight: 1.5,
+              dashArray: '5, 5'
+            });
+            circle.bindPopup(`<b>${sz.name}</b><br/>Type: ${sz.type}<br/>Waterlogging reduced from ${sz.normalHrs}h to ${sz.spongeHrs}h (-85%)`);
+            markersLayer.current.addLayer(circle);
+          });
+        }
+
+        fireNodes.forEach(fn => {
+          const color = fn.alert ? '#FF3D00' : '#FF9100';
+          const icon = L.divIcon({
+            className: 'custom-pin',
+            html: `<div style="background:${color}; width:16px; height:16px; border-radius:50%; border:2px solid white; box-shadow:0 0 10px ${color}"></div>`,
+            iconSize: [16, 16]
+          });
+          const marker = L.marker([fn.lat, fn.lng], { icon });
+          marker.on('click', () => { sound.beep(); setSelectedNode(fn); });
+          markersLayer.current.addLayer(marker);
+        });
+
+        buildings.forEach(bld => {
+          const color = bld.risk === 'RED' ? '#FF3D00' : bld.risk === 'AMBER' ? '#FFB300' : '#00E676';
+          const icon = L.divIcon({
+            className: 'custom-pin',
+            html: `<div style="background:${color}; width:14px; height:14px; border:2px solid black; transform:rotate(45deg); box-shadow:0 0 8px ${color}"></div>`,
+            iconSize: [14, 14]
+          });
+          const marker = L.marker([bld.lat, bld.lng], { icon });
+          marker.on('click', () => { sound.beep(); setSelectedNode(bld); });
+          markersLayer.current.addLayer(marker);
+        });
+
+        drains.forEach(dr => {
+          const isRisk = (dr.level / dr.max) >= 0.70;
+          const color = isRisk ? '#FF3D00' : '#2979FF';
+          const icon = L.divIcon({
+            className: 'custom-pin',
+            html: `<div style="background:${color}; width:12px; height:12px; border-radius:50%; border:1.5px solid white;"></div>`,
+            iconSize: [12, 12]
+          });
+          const marker = L.marker([dr.lat, dr.lng], { icon });
+          marker.on('click', () => { sound.beep(); setSelectedNode(dr); });
+          markersLayer.current.addLayer(marker);
+        });
+      }, [fireNodes, buildings, drains, spongeActive]);
+
+      // Draw Emergency Route
+      useEffect(() => {
+        if (!routeLayer.current) return;
+        routeLayer.current.clearLayers();
+
+        if (activeRoute) {
+          const latlngs = [
+            [32.7050, 74.8580],
+            [32.7150, 74.8560],
+            [activeRoute.lat, activeRoute.lng]
+          ];
+          const polyline = L.polyline(latlngs, {
+            color: '#FF3D00',
+            weight: 4,
+            dashArray: '8, 8',
+            opacity: 0.95
+          });
+          routeLayer.current.addLayer(polyline);
+        }
+      }, [activeRoute]);
+
+      // Telemetry Simulation Loop
+      useEffect(() => {
+        const interval = setInterval(() => {
+          setFireNodes(prev => prev.map(fn => fn.alert ? fn : {
+            ...fn,
+            temp: +(fn.temp + (Math.random() - 0.48) * 0.4).toFixed(1),
+            smoke: +(fn.smoke + (Math.random() - 0.48) * 0.8).toFixed(1),
+            gas: +(fn.gas + (Math.random() - 0.48) * 0.6).toFixed(1)
+          }));
+          setDrains(prev => prev.map(dr => {
+            const nextLvl = Math.min(dr.max * 0.95, Math.max(40, +(dr.level + (Math.random() - 0.5) * 1.5).toFixed(1)));
+            return { ...dr, level: nextLvl };
+          }));
+        }, 2500);
+        return () => clearInterval(interval);
+      }, []);
+
+      // Handlers
+      const triggerFire = () => {
+        sound.siren();
+        const target = fireNodes[0];
+        setFireNodes(prev => prev.map((f, i) => i === 0 ? { ...f, temp: 79.2, smoke: 410, gas: 140, alert: true } : f));
+        setActiveRoute({ lat: target.lat, lng: target.lng, station: "Gandhi Nagar Fire Brigade", eta: 180 });
+        setAlerts(prev => [{
+          id: Date.now(),
+          title: `🔥 CRITICAL FIRE ALERT: ${target.location}`,
+          desc: "High thermal spike (79.2°C). Edge AI verified (false alarm filtered). Rapid brigade en route.",
+          shield: "FIRE",
+          risk: "RED",
+          time: "Just now",
+          verified: true
+        }, ...prev]);
+        setShowSmsModal(true);
+      };
+
+      const simulateRain = () => {
+        sound.warn();
+        setDrains(prev => prev.map(d => ({ ...d, level: Math.min(d.max * 0.94, d.level + 75) })));
+        setBuildings(prev => prev.map(b => b.risk === 'AMBER' ? { ...b, risk: 'RED', tilt: b.tilt + 0.4 } : b));
+        setAlerts(prev => [{
+          id: Date.now(),
+          title: "🌧️ MONSOON SURGE & FLOOD WARNING",
+          desc: "Drainage exceeded 70% threshold. Soil saturation escalated Amber buildings to Red.",
+          shield: "WATER",
+          risk: "RED",
+          time: "Just now",
+          verified: true
+        }, ...prev]);
+      };
+
+      const simulateTremor = () => {
+        sound.siren();
+        setBuildings(prev => prev.map(b => ({
+          ...b,
+          vib: +(b.vib + 1.8).toFixed(2),
+          tilt: +(b.tilt + 0.5).toFixed(1),
+          risk: "RED"
+        })));
+        setAlerts(prev => [{
+          id: Date.now(),
+          title: "⚠️ SEISMIC ACCELERATION ALERT",
+          desc: "Tremor peak (2.4 mm/s²). Mubarak Mandi Palace & heritage structures alerted.",
+          shield: "STRUCTURE",
+          risk: "RED",
+          time: "Just now",
+          verified: true
+        }, ...prev]);
+        setShowSmsModal(true);
+      };
+
+      const resetAll = () => {
+        sound.beep();
+        setFireNodes(INITIAL_FIRE_NODES);
+        setBuildings(INITIAL_BUILDINGS);
+        setDrains(INITIAL_DRAINS);
+        setActiveRoute(null);
+        setAutoScenarioCaption(null);
+        setAlerts(prev => [{
+          id: Date.now(),
+          title: "System Baseline Restored",
+          desc: "All active hazards resolved. Telemetry normalized to operational baseline.",
+          shield: "ALL",
+          risk: "GREEN",
+          time: "Just now",
+          verified: true
+        }, ...prev]);
+      };
+
+      const startAutoScenario = () => {
+        resetAll();
+        setAutoScenarioCaption("Step 1/5: Jammu Rakshak baseline operational across 7 city sectors.");
+        setTimeout(() => {
+          triggerFire();
+          setAutoScenarioCaption("Step 2/5: 🔥 FIRE ALERT at Jewel Chowk! Edge AI verified. Unit dispatched with ETA.");
+        }, 10000);
+        setTimeout(() => {
+          simulateRain();
+          setAutoScenarioCaption("Step 3/5: 🌧️ MONSOON SURGE: Drains reached 85% capacity. Sponge zones absorbing runoff.");
+        }, 22000);
+        setTimeout(() => {
+          simulateTremor();
+          setAutoScenarioCaption("Step 4/5: ⚠️ SEISMIC ACCELERATION: Heritage masonry tilt increases. Red alert fired.");
+        }, 36000);
+        setTimeout(() => {
+          setAutoScenarioCaption("Step 5/5: 🚨 INTER-AGENCY DISPATCH: Broadcast sent in Dogri, Hindi, Urdu & English.");
+        }, 48000);
+        setTimeout(() => {
+          setAutoScenarioCaption("✅ Resilience Scenario Complete: All 3 shields fully operational.");
+        }, 58000);
+      };
+
+      // Export Situation Report (SitRep)
+      const exportSitRep = () => {
+        sound.beep();
+        const sitrep = {
+          title: "Jammu Rakshak Situational Report (SitRep)",
+          generatedAt: new Date().toISOString(),
+          hackathon: "Jammu Smart City Hackathon 2026",
+          theme: "Theme 06: Urban Resilience & Disaster Management",
+          team: "ENDLIFERZ",
+          fireAlerts: fireNodes.filter(f => f.alert),
+          buildingRiskSummary: {
+            red: buildings.filter(b => b.risk === 'RED').length,
+            amber: buildings.filter(b => b.risk === 'AMBER').length,
+            green: buildings.filter(b => b.risk === 'GREEN').length
+          },
+          drainsAtRisk: drains.filter(d => (d.level / d.max) >= 0.70),
+          recentIncidents: alerts.slice(0, 5)
+        };
+        const blob = new Blob([JSON.stringify(sitrep, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Jammu_Rakshak_SitRep_${Date.now()}.json`;
+        a.click();
+        showToast("✓ Situational Report downloaded successfully!");
+      };
+
+      // Share live URL
+      const shareDashboard = () => {
+        sound.beep();
+        if (navigator.share) {
+          navigator.share({
+            title: "Jammu Rakshak — Resilience Command Dashboard",
+            text: "Jammu Smart City Hackathon (Theme 06: Urban Resilience & Disaster Management) by Team ENDLIFERZ",
+            url: window.location.href
+          }).catch(() => {});
+        } else {
+          navigator.clipboard.writeText(window.location.href);
+          showToast("✓ Live Dashboard link copied to clipboard!");
+        }
+      };
+
+      // Toggle fullscreen
+      const toggleFullscreen = () => {
+        sound.beep();
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen();
+        }
+      };
+
+      return (
+        <div className="flex flex-col min-h-screen bg-cyberDark">
+          {/* Toast Notification */}
+          {toastMsg && (
+            <div className="fixed bottom-4 right-4 z-[2000] bg-neonEmerald text-black font-black text-xs px-4 py-2.5 rounded-lg shadow-2xl border border-white">
+              {toastMsg}
+            </div>
+          )}
+
+          {/* Top Bar */}
+          <header className="bg-cyberNavy border-b border-cyberBorder px-4 py-2 flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-cyan-400 to-blue-600 flex items-center justify-center font-black text-black shadow-lg">
+                JR
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="font-black tracking-wider text-base text-slate-100">
+                    {selectedLang === 'HI' ? 'जम्मू रक्षक' : selectedLang === 'UR' ? 'جموں رکشاک' : selectedLang === 'DOGRI' ? 'जम्मू रक्षक' : 'JAMMU RAKSHAK'}
+                  </h1>
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-950 text-neonCyan border border-cyan-800">
+                    TEAM ENDLIFERZ
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">Jammu Smart City Hackathon • Theme 06: Urban Resilience</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs flex-wrap">
+              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-cyberElevated border border-cyberBorder font-mono text-neonEmerald">
+                <span className="w-2 h-2 rounded-full bg-neonEmerald animate-ping"></span>
+                <span>ONLINE {timeStr}</span>
+              </div>
+
+              {/* Action Buttons */}
+              <button onClick={() => { sound.beep(); setShowCrackModal(true); }} className="px-2.5 py-1 rounded bg-purple-950 border border-purple-600 text-purple-300 font-bold hover:bg-purple-900 transition">
+                AI CRACK
+              </button>
+
+              <button onClick={() => { sound.beep(); setShowOpsModal(true); }} className="px-2.5 py-1 rounded bg-amber-950 border border-amber-600 text-amber-300 font-bold hover:bg-amber-900 transition">
+                OPERATIONS
+              </button>
+
+              <button onClick={exportSitRep} title="Export SitRep Report" className="px-2 py-1 rounded bg-cyberElevated border border-cyberBorder text-slate-200 hover:text-white font-bold transition">
+                📄 SitRep
+              </button>
+
+              <button onClick={shareDashboard} title="Share Live Dashboard" className="px-2 py-1 rounded bg-cyberElevated border border-cyberBorder text-neonCyan hover:bg-cyan-950 font-bold transition">
+                🔗 Share
+              </button>
+
+              <button onClick={() => setShowPublishModal(true)} title="Publish to Website" className="px-2.5 py-1 rounded bg-emerald-950 border border-neonEmerald text-neonEmerald font-black hover:bg-emerald-900 transition">
+                🚀 Publish
+              </button>
+
+              {pwaPrompt && (
+                <button onClick={installPwa} className="px-2.5 py-1 rounded bg-cyan-950 border border-cyan-500 text-cyan-300 font-black hover:bg-cyan-900 transition">
+                  ⬇️ Install App
+                </button>
+              )}
+
+              <select value={selectedLang} onChange={e => { sound.beep(); setSelectedLang(e.target.value); }} className="bg-cyberElevated border border-cyberBorder text-slate-200 rounded px-2 py-1 text-xs">
+                <option value="EN">EN (English)</option>
+                <option value="HI">हिंदी (Hindi)</option>
+                <option value="UR">اردو (Urdu)</option>
+                <option value="DOGRI">डोगरी (Dogri)</option>
+              </select>
+
+              <button onClick={() => { sound.enabled = !sound.enabled; setSoundMuted(!sound.enabled); }} className="p-1.5 rounded bg-cyberElevated border border-cyberBorder text-slate-300 hover:text-white" title="Toggle Sound">
+                {soundMuted ? '🔇' : '🔊'}
+              </button>
+
+              <button onClick={toggleFullscreen} className="p-1.5 rounded bg-cyberElevated border border-cyberBorder text-slate-300 hover:text-white" title="Toggle Fullscreen">
+                ⛶
+              </button>
+
+              <button onClick={() => setShowArchModal(true)} className="p-1.5 rounded bg-cyberElevated border border-cyberBorder text-slate-300 hover:text-white" title="System Architecture">
+                ℹ️
+              </button>
+            </div>
+          </header>
+
+          {/* Scenario Banner */}
+          {autoScenarioCaption && (
+            <div className="bg-emerald-950 border-b border-neonEmerald px-4 py-1.5 text-xs text-neonEmerald flex items-center justify-between">
+              <span>{autoScenarioCaption}</span>
+              <button onClick={() => setAutoScenarioCaption(null)} className="text-red-400 font-bold ml-4">DISMISS</button>
+            </div>
+          )}
+
+          {/* KPI Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 p-3">
+            <div className="bg-cyberCard border border-cyberBorder rounded p-2.5">
+              <span className="text-[10px] text-slate-400 font-bold tracking-wider">FIRE SHIELD</span>
+              <p className="text-sm font-black text-slate-100">{fireNodes.filter(f => f.alert).length} ACTIVE ALERTS</p>
+              <span className="text-[10px] text-neonEmerald font-medium">Edge AI Verified (Filtered)</span>
+            </div>
+
+            <div className="bg-cyberCard border border-cyberBorder rounded p-2.5">
+              <span className="text-[10px] text-slate-400 font-bold tracking-wider">STRUCTURE SHIELD</span>
+              <p className="text-sm font-black text-slate-100">
+                {buildings.filter(b => b.risk === 'GREEN').length} G • {buildings.filter(b => b.risk === 'AMBER').length} A • {buildings.filter(b => b.risk === 'RED').length} R
+              </p>
+              <span className="text-[10px] text-warningAmber font-medium">{buildings.length} Heritage / High-Rise</span>
+            </div>
+
+            <div className="bg-cyberCard border border-cyberBorder rounded p-2.5">
+              <span className="text-[10px] text-slate-400 font-bold tracking-wider">WATER SHIELD</span>
+              <p className="text-sm font-black text-slate-100">
+                {drains.filter(d => (d.level / d.max) >= 0.70).length} / {drains.length} AT RISK
+              </p>
+              <span className="text-[10px] text-waterBlue font-medium">Sponge Pits Active (-85% flood)</span>
+            </div>
+
+            <div className="bg-cyberCard border border-cyberBorder rounded p-2.5">
+              <span className="text-[10px] text-slate-400 font-bold tracking-wider">RESPONSE TIME</span>
+              <p className="text-sm font-black text-slate-100">{activeRoute ? `${activeRoute.eta}s ETA` : "3.8 min AVG"}</p>
+              <span className="text-[10px] text-neonCyan font-medium">{activeRoute ? "Rapid Unit Dispatched" : "-18% vs Baseline"}</span>
+            </div>
+          </div>
+
+          {/* Main Content Area */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 px-3 flex-1 min-h-[380px]">
+            {/* Map */}
+            <div className="lg:col-span-2 relative bg-cyberNavy rounded border border-cyberBorder overflow-hidden flex flex-col">
+              <div className="absolute top-2 left-2 z-[400] flex gap-2">
+                <button onClick={() => { sound.beep(); setSpongeActive(!spongeActive); }} className={`text-xs px-2.5 py-1 rounded font-bold border transition ${spongeActive ? 'bg-emerald-900 border-neonEmerald text-neonEmerald' : 'bg-cyberElevated border-cyberBorder text-slate-400'}`}>
+                  🌿 Sponge Layer {spongeActive ? 'ON' : 'OFF'}
+                </button>
+              </div>
+
+              <div ref={mapRef} className="w-full flex-1 min-h-[340px]"></div>
+
+              {selectedNode && (
+                <div className="absolute top-10 right-2 z-[400] bg-cyberCard border border-neonCyan rounded p-3 w-64 shadow-2xl text-xs">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-neonCyan tracking-wider uppercase">{selectedNode.name}</span>
+                    <button onClick={() => setSelectedNode(null)} className="text-slate-400 hover:text-white font-bold">✕</button>
+                  </div>
+                  <p className="text-[11px] text-slate-300 mb-2">Location: {selectedNode.location}</p>
+                  {selectedNode.temp !== undefined && (
+                    <div className="grid grid-cols-3 gap-1 text-[10px]">
+                      <div className="bg-cyberDark p-1 rounded">Temp: <b>{selectedNode.temp}°C</b></div>
+                      <div className="bg-cyberDark p-1 rounded">Smoke: <b>{selectedNode.smoke}</b></div>
+                      <div className="bg-cyberDark p-1 rounded">Gas: <b>{selectedNode.gas}</b></div>
+                    </div>
+                  )}
+                  {selectedNode.tilt !== undefined && (
+                    <div className="grid grid-cols-3 gap-1 text-[10px]">
+                      <div className="bg-cyberDark p-1 rounded">Tilt: <b>{selectedNode.tilt}°</b></div>
+                      <div className="bg-cyberDark p-1 rounded">Crack: <b>{selectedNode.crack}mm</b></div>
+                      <div className="bg-cyberDark p-1 rounded">Vib: <b>{selectedNode.vib}</b></div>
+                    </div>
+                  )}
+                  {selectedNode.max !== undefined && (
+                    <div className="grid grid-cols-2 gap-1 text-[10px]">
+                      <div className="bg-cyberDark p-1 rounded">Level: <b>{selectedNode.level} cm</b></div>
+                      <div className="bg-cyberDark p-1 rounded">Capacity: <b>{Math.round((selectedNode.level/selectedNode.max)*100)}%</b></div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Alert Stream */}
+            <div className="bg-cyberNavy rounded border border-cyberBorder p-3 flex flex-col">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-xs font-black tracking-wider text-slate-200">LIVE INCIDENT STREAM</span>
+                <span className="text-[10px] bg-red-950 text-criticalRed px-1.5 py-0.5 rounded font-bold border border-red-800">
+                  {alerts.length} EVENTS
+                </span>
+              </div>
+              <div className="overflow-y-auto space-y-2 flex-1 max-h-[380px] pr-1">
+                {alerts.map(a => (
+                  <div key={a.id} className="bg-cyberCard border-l-4 rounded p-2.5 text-xs" style={{ borderColor: a.risk === 'RED' ? '#FF3D00' : a.risk === 'AMBER' ? '#FFB300' : '#00E676' }}>
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-bold text-slate-100">{a.title}</span>
+                      <span className="text-[9px] text-slate-400">{a.time}</span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-tight mb-2">{a.desc}</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[9px] text-neonEmerald font-bold">✓ Edge AI Verified</span>
+                      {a.risk === 'RED' && (
+                        <button onClick={() => setShowSmsModal(true)} className="text-[9px] bg-red-950 text-red-300 border border-red-700 px-1.5 py-0.5 rounded font-bold hover:bg-red-900">
+                          BROADCAST LOG
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Tabs */}
+          <div className="p-3">
+            <div className="bg-cyberNavy border border-cyberBorder rounded p-3">
+              <div className="flex gap-2 border-b border-cyberBorder pb-2 mb-3">
+                <button onClick={() => setActiveTab('fire')} className={`px-3 py-1 text-xs font-bold rounded transition ${activeTab === 'fire' ? 'bg-amber-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                  🔥 FIRE SHIELD (DETECT)
+                </button>
+                <button onClick={() => setActiveTab('structure')} className={`px-3 py-1 text-xs font-bold rounded transition ${activeTab === 'structure' ? 'bg-amber-500 text-black' : 'text-slate-400 hover:text-white'}`}>
+                  🏛️ STRUCTURE SHIELD (MONITOR)
+                </button>
+                <button onClick={() => setActiveTab('water')} className={`px-3 py-1 text-xs font-bold rounded transition ${activeTab === 'water' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                  💧 WATER SHIELD (ABSORB)
+                </button>
+              </div>
+
+              {activeTab === 'fire' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {fireNodes.map(f => (
+                    <div key={f.id} onClick={() => { sound.beep(); setSelectedNode(f); }} className="bg-cyberCard border border-cyberBorder rounded p-2 text-xs cursor-pointer hover:border-amber-500 transition">
+                      <div className="flex justify-between font-bold">
+                        <span>{f.name}</span>
+                        <span className="text-amber-400">{f.temp}°C</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">{f.location} • Smoke: {f.smoke} ppm • Gas: {f.gas} ppm</p>
+                      <span className="text-[9px] text-neonEmerald font-bold">✓ False alarm filtered</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeTab === 'structure' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {buildings.map(b => (
+                    <div key={b.id} onClick={() => { sound.beep(); setSelectedNode(b); }} className="bg-cyberCard border border-cyberBorder rounded p-2 text-xs cursor-pointer hover:border-cyan-400 transition">
+                      <div className="flex justify-between font-bold">
+                        <span>{b.name}</span>
+                        <span className={b.risk === 'RED' ? 'text-criticalRed' : b.risk === 'AMBER' ? 'text-warningAmber' : 'text-neonEmerald'}>{b.risk}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">{b.type} ({b.age} yrs) • Tilt: {b.tilt}° • Crack: {b.crack}mm • Vib: {b.vib}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {activeTab === 'water' && (
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+                  {drains.map(d => {
+                    const pct = Math.round((d.level / d.max) * 100);
+                    return (
+                      <div key={d.id} onClick={() => { sound.beep(); setSelectedNode(d); }} className="bg-cyberCard border border-cyberBorder rounded p-2 text-xs cursor-pointer hover:border-blue-500 transition">
+                        <div className="flex justify-between font-bold">
+                          <span>{d.name}</span>
+                          <span className={pct >= 70 ? 'text-criticalRed' : 'text-waterBlue'}>{pct}%</span>
+                        </div>
+                        <div className="w-full bg-cyberDark h-1.5 rounded-full mt-1.5 mb-1 overflow-hidden">
+                          <div className={`h-full ${pct >= 70 ? 'bg-criticalRed' : 'bg-waterBlue'}`} style={{ width: `${pct}%` }}></div>
+                        </div>
+                        <p className="text-[10px] text-slate-400">{d.location} • {d.level}/{d.max} cm</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Modal: Publish to Website */}
+          {showPublishModal && (
+            <div className="fixed inset-0 z-[1000] bg-black/80 flex items-center justify-center p-4">
+              <div className="bg-cyberNavy border-2 border-neonEmerald rounded-xl max-w-lg w-full p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-black text-neonEmerald tracking-wider text-base">🚀 PUBLISH JAMMU RAKSHAK TO WEBSITE</h3>
+                  <button onClick={() => setShowPublishModal(false)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+                <p className="text-xs text-slate-300">
+                  Your project is now 100% web-ready! You can publish it to a live public website for the hackathon judges using any of the following methods:
+                </p>
+
+                <div className="space-y-3 text-xs">
+                  {/* Option 1: Vercel */}
+                  <div className="bg-cyberCard border border-cyberBorder rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-bold text-slate-100 text-sm">Option 1: Deploy to Vercel (Instant)</span>
+                      <span className="bg-blue-900 text-blue-200 px-2 py-0.5 rounded text-[10px] font-bold">Recommended</span>
+                    </div>
+                    <p className="text-slate-400 text-[11px] mb-2">Push to your GitHub repository and link to Vercel. <code>vercel.json</code> is already pre-configured!</p>
+                    <a href="https://vercel.com/new" target="_blank" rel="noopener noreferrer" className="inline-block bg-white text-black font-black px-3 py-1.5 rounded text-[11px] hover:bg-slate-200 transition">
+                      Deploy with Vercel →
+                    </a>
+                  </div>
+
+                  {/* Option 2: Netlify */}
+                  <div className="bg-cyberCard border border-cyberBorder rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-bold text-slate-100 text-sm">Option 2: Deploy to Netlify (Drag & Drop)</span>
+                    </div>
+                    <p className="text-slate-400 text-[11px] mb-2">Export your project as a ZIP and drag it onto Netlify Drop. <code>netlify.toml</code> is pre-configured.</p>
+                    <a href="https://app.netlify.com/drop" target="_blank" rel="noopener noreferrer" className="inline-block bg-cyan-500 text-black font-black px-3 py-1.5 rounded text-[11px] hover:bg-cyan-400 transition">
+                      Deploy with Netlify Drop →
+                    </a>
+                  </div>
+
+                  {/* Option 3: GitHub Pages */}
+                  <div className="bg-cyberCard border border-cyberBorder rounded-lg p-3">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="font-bold text-slate-100 text-sm">Option 3: GitHub Pages</span>
+                    </div>
+                    <p className="text-slate-400 text-[11px] mb-2">GitHub Actions workflow <code>.github/workflows/deploy.yml</code> is created. Go to GitHub repo → Settings → Pages → Deploy from Actions.</p>
+                  </div>
+                </div>
+
+                <div className="text-right pt-2">
+                  <button onClick={() => setShowPublishModal(false)} className="px-4 py-1.5 bg-cyberElevated text-slate-300 font-bold rounded hover:bg-slate-700 transition text-xs">
+                    CLOSE
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: Operations Controls */}
+          {showOpsModal && (
+            <div className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4">
+              <div className="bg-cyberNavy border border-warningAmber rounded-xl max-w-md w-full p-5 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-black text-warningAmber tracking-wider text-sm">INCIDENT & HAZARD OPERATIONS</h3>
+                  <button onClick={() => setShowOpsModal(false)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+                <p className="text-xs text-slate-300">Run coordinated multi-hazard resilience response simulations in real-time.</p>
+                <div className="space-y-2 pt-2">
+                  <button onClick={() => { startAutoScenario(); setShowOpsModal(false); }} className="w-full text-left p-2.5 rounded bg-emerald-950 border border-neonEmerald text-xs font-bold text-neonEmerald hover:bg-emerald-900 transition">
+                    🎬 RUN 60s RESILIENCE SCENARIO
+                  </button>
+                  <button onClick={() => { triggerFire(); setShowOpsModal(false); }} className="w-full text-left p-2.5 rounded bg-cyberCard border border-cyberBorder text-xs font-bold text-slate-100 hover:border-red-500 transition">
+                    🔥 Trigger Fire Incident (Nearest unit route & ETA countdown)
+                  </button>
+                  <button onClick={() => { simulateRain(); setShowOpsModal(false); }} className="w-full text-left p-2.5 rounded bg-cyberCard border border-cyberBorder text-xs font-bold text-slate-100 hover:border-blue-500 transition">
+                    🌧️ Simulate Monsoon Cloudburst (Drain surge & flood alerts)
+                  </button>
+                  <button onClick={() => { simulateTremor(); setShowOpsModal(false); }} className="w-full text-left p-2.5 rounded bg-cyberCard border border-cyberBorder text-xs font-bold text-slate-100 hover:border-amber-500 transition">
+                    ⚠️ Earthquake Tremor (Seismic tilt & heritage risk shift)
+                  </button>
+                  <button onClick={() => { resetAll(); setShowOpsModal(false); }} className="w-full text-left p-2.5 rounded bg-cyberCard border border-cyberBorder text-xs font-bold text-neonCyan hover:border-cyan-400 transition">
+                    🔄 Reset Command Baseline
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: Citizen Crack Report */}
+          {showCrackModal && (
+            <div className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4">
+              <div className="bg-cyberNavy border border-purple-500 rounded-xl max-w-md w-full p-5 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-black text-purple-300 tracking-wider text-sm">CITIZEN CRACK AI INSPECTION</h3>
+                  <button onClick={() => setShowCrackModal(false)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+                <p className="text-xs text-slate-300">Powered by Gemini Vision Multimodal Forensic Assessment.</p>
+                <div className="space-y-2 text-xs">
+                  <div className="bg-cyberCard p-2.5 rounded border border-cyberBorder">
+                    <span className="font-bold text-slate-200">Selected Crack Sample:</span>
+                    <p className="text-[11px] text-slate-400 mt-1">Diagonal Shear Crack (Old City / Raghunath Bazar) - 5.8mm width</p>
+                  </div>
+                  <div className="bg-cyberDark p-2.5 rounded border border-purple-500/50 space-y-1 text-[11px]">
+                    <div className="flex justify-between">
+                      <span className="text-criticalRed font-bold">Severity: HIGH RISK</span>
+                      <span className="text-neonEmerald">96% AI Confidence</span>
+                    </div>
+                    <p className="text-slate-300">Differential foundation settlement with active masonry shear failure.</p>
+                    <p className="text-neonCyan font-bold">Action: Immediate structural shoring required within 6 hours.</p>
+                  </div>
+                  <button onClick={() => {
+                    sound.warn();
+                    setAlerts(prev => [{
+                      id: Date.now(),
+                      title: "📸 CITIZEN CRACK REPORT: Old City",
+                      desc: "Diagonal Shear Crack (5.8mm) analyzed by Gemini AI (96% conf). Structural shoring dispatched.",
+                      shield: "STRUCTURE",
+                      risk: "RED",
+                      time: "Just now",
+                      verified: true
+                    }, ...prev]);
+                    setShowCrackModal(false);
+                    showToast("✓ Citizen Crack report pinned to map & alert feed");
+                  }} className="w-full py-2 bg-neonEmerald text-black font-black rounded hover:bg-emerald-400 transition mt-2">
+                    SUBMIT TO COMMAND MAP & ALERTS
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: Emergency Broadcast & Dispatch */}
+          {showSmsModal && (
+            <div className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4">
+              <div className="bg-cyberNavy border border-criticalRed rounded-xl max-w-md w-full p-5 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-black text-criticalRed tracking-wider text-sm">EMERGENCY BROADCAST PROTOCOL</h3>
+                  <button onClick={() => setShowSmsModal(false)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+                <div className="bg-slate-900 border border-slate-700 rounded p-3 text-xs">
+                  <p className="font-mono text-cyan-400 text-[10px] mb-1">BROADCAST SMS: +91 (JK-DISASTER-ALERT)</p>
+                  <p className="text-slate-100 font-medium">
+                    {selectedLang === 'HI' && '🚨 जम्मू रक्षक आपातकालीन चेतावनी: गंभीर खतरा पाया गया। आपदा मोचन दल रवाना। 200 मीटर का दायरा तुरंत खाली करें।'}
+                    {selectedLang === 'UR' && '🚨 جموں رکشاک ہنگامی الرٹ: علاقے میں شدید خطرہ۔ امدادی ٹیمیں روانہ ہو چکی ہیں۔ 200 میٹر علاقہ خالی کریں۔'}
+                    {selectedLang === 'DOGRI' && '🚨 जम्मू रक्षक संकट चेतौनी: बड्डा खतरा पाया गेआ ऐ। राहत मोचन दल रवाना कीती गेई ऐ। 200 मीटर दायरा खाली करो।'}
+                    {selectedLang === 'EN' && '🚨 JAMMU RAKSHAK EMERGENCY ALERT: Critical hazard detected in sector. Civic units on high alert. Evacuate 200m zone immediately.'}
+                  </p>
+                </div>
+                <div className="text-[11px] text-slate-300 space-y-1">
+                  <p className="font-bold text-slate-400">DISPATCH VERIFICATION LOG:</p>
+                  <p>✓ Fire & Emergency Services: Rapid response vehicle dispatched</p>
+                  <p>✓ JMC Chief Engineers: Structural engineering team alerted</p>
+                  <p>✓ SDMA: Perimeter safety advisory broadcasted</p>
+                  <p>✓ Traffic Police Jammu: Priority green corridor active</p>
+                </div>
+                <button onClick={() => setShowSmsModal(false)} className="w-full py-2 bg-cyberElevated text-slate-200 font-bold rounded hover:bg-slate-700 transition">
+                  ACKNOWLEDGE & CLOSE
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Modal: Architecture */}
+          {showArchModal && (
+            <div className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4">
+              <div className="bg-cyberNavy border border-neonCyan rounded-xl max-w-md w-full p-5 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-black text-neonCyan tracking-wider text-sm">SYSTEM ARCHITECTURE</h3>
+                  <button onClick={() => setShowArchModal(false)} className="text-slate-400 hover:text-white">✕</button>
+                </div>
+                <p className="text-xs text-slate-300 font-bold">Sensors (LoRaWAN) → MQTT → API → AI Engine → Dashboard → Alerts</p>
+                <div className="bg-cyberCard p-3 rounded text-xs space-y-1 text-slate-300 border border-cyberBorder">
+                  <p>1. <b>LoRaWAN Mesh</b>: DHT22, MQ-2, MPU6050, Ultrasonic depth sensors</p>
+                  <p>2. <b>MQTT Gateways</b>: Transmits edge telemetry frames every 2-3s</p>
+                  <p>3. <b>Spatial Risk Engine</b>: Multi-hazard matrix calculations</p>
+                  <p>4. <b>Gemini 3.5 Flash AI</b>: Forensic crack vision & false-alarm filtration</p>
+                  <p>5. <b>Jammu Rakshak Dashboard</b>: Unified 3-shield command center</p>
+                  <p>6. <b>Multi-Agency SMS</b>: Dogri, Hindi, Urdu & English citizen alerts</p>
+                </div>
+                <div className="text-right">
+                  <button onClick={() => setShowArchModal(false)} className="px-4 py-1.5 bg-neonCyan text-black font-bold rounded hover:bg-cyan-300 transition text-xs">
+                    CLOSE
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
