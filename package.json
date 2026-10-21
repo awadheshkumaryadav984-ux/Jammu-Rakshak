@@ -4,9 +4,9 @@
   "description": "Urban Resilience & Disaster Management Command Dashboard for Jammu Smart City Hackathon | Team ENDLIFERZ",
   "main": "index.html",
   "scripts": {
-    "dev": "npx serve .",
-    "start": "npx serve .",
-    "build": "echo 'Static web build ready'"
+    "dev": "npx serve public",
+    "start": "npx serve public",
+    "build": "mkdir -p public && cp -r index.html manifest.json sw.js public/ 2>/dev/null || true"
   },
   "keywords": [
     "jammu-smart-city",
