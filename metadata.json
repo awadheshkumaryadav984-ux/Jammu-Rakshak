@@ -1,0 +1,6 @@
+{
+  "name": "Jammu Rakshak",
+  "description": "Resilience Command Dashboard for Jammu Smart City (Fire Shield, Structure Shield, Water Shield) with live simulation, AI crack detection, and emergency dispatch.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

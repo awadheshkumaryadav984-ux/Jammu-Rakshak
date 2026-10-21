@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Outer Shield Border -->
+    <path
+        android:pathData="M 54,26 L 76,34 L 76,56 C 76,70 66,81 54,86 C 42,81 32,70 32,56 L 32,34 Z"
+        android:strokeWidth="2.5"
+        android:strokeColor="#00E5FF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="32"
+                android:startY="26"
+                android:endX="76"
+                android:endY="86"
+                android:type="linear">
+                <item android:color="#3300E5FF" android:offset="0.0" />
+                <item android:color="#1A0B132B" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Fire Flame (Left / Top: Fire Shield) -->
+    <path
+        android:fillColor="#FF6D00"
+        android:pathData="M 46,44 C 44,48 44,52 48,55 C 50,56.5 50,58 48,60 C 47,61 45,61 44,60 C 43,58 43,56 42,55 C 40,57 39,60 41,63 C 43,66 47,67 50,65 C 53,63 54,60 54,56 C 54,51 49,48 46,44 Z" />
+    <!-- Structural Tower / Building Column (Center: Structure Shield) -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 52,40 L 56,40 L 56,66 L 52,66 Z M 57,45 L 61,45 L 61,66 L 57,66 Z M 47,48 L 51,48 L 51,66 L 47,66 Z" />
+    <!-- Water Wave (Bottom: Water Shield) -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#2979FF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M 38,71 Q 44,68 50,71 T 62,71 T 70,71" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#00E5FF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round"
+        android:pathData="M 42,75 Q 48,72 54,75 T 66,75" />
+    <!-- Radar pulse dot at shield peak -->
+    <path
+        android:fillColor="#00E5FF"
+        android:pathData="M 54,31 m -2.5,0 a 2.5,2.5 0 1,0 5,0 a 2.5,2.5 0 1,0 -5,0" />
+</vector>
